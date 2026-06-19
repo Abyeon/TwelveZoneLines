@@ -1,11 +1,14 @@
 ﻿using System;
 using System.Numerics;
 using Dalamud.Bindings.ImGui;
+using Dalamud.Interface.Colors;
 using Dalamud.Interface.Textures;
 using Dalamud.Interface.Utility;
 using Dalamud.Interface.Utility.Raii;
 using Dalamud.Interface.Windowing;
+using FFXIVClientStructs.FFXIV.Client.Game.Character;
 using Lumina.Excel.Sheets;
+using TwelveZoneLines.Utils;
 
 namespace TwelveZoneLines.Windows;
 
@@ -31,9 +34,46 @@ public class MainWindow : Window, IDisposable
     }
 
     public void Dispose() { }
-
-    public override void Draw()
+    
+    private static void DrawLineToGamePos(Vector3 pos, uint color)
     {
+        if (Plugin.GameGui.WorldToScreen(pos, out var screenPos))
+        {
+            var draw = ImGui.GetForegroundDrawList();
+            draw.AddLine(ImGui.GetMousePos(), screenPos, color);
+            draw.AddCircleFilled(screenPos, 3f, color);
+        }
+    }
+
+    public override unsafe void Draw()
+    {
+        if (!Safe.Ptr((BattleChara*)Plugin.ObjectTable.LocalPlayer?.Address, out var player)) return;
+        
+        var height = player->Height;
+        Vector3 playerPos = player->Position with { Y = player->Position.Y + height };
+        
+        var territory = Plugin.DataManager.GetExcelSheet<TerritoryType>();
+        
+        foreach (var exit in Plugin.ZoneWatcher.ZoneExits)
+        {
+            if (territory.TryGetRow(exit.DestinationId, out var row))
+            {
+                var closestPoint = exit.GetClosestPoint(playerPos);
+                
+                var dist = Vector3.DistanceSquared(playerPos, closestPoint);
+                if (dist >= 350) continue;
+                
+                var draw = ImGui.GetForegroundDrawList();
+                if (Plugin.GameGui.WorldToScreen(closestPoint, out var screenPos))
+                {
+                    var name = row.PlaceName.Value.Name.ToString();
+                    var size = ImGui.CalcTextSize(name) * 0.5f;
+                    
+                    draw.AddText(screenPos - size, ImGui.ColorConvertFloat4ToU32(ImGuiColors.DalamudWhite), row.PlaceName.Value.Name.ToString());
+                }
+            }
+        }
+        
         ImGui.Text($"The random config bool is {plugin.Configuration.SomePropertyToBeSavedAndWithADefault}");
 
         if (ImGui.Button("Show Settings"))
