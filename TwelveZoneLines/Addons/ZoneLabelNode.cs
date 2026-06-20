@@ -53,7 +53,7 @@ public class ZoneLabelNode : OverlayNode
         labelNode.FontType = FontType.Axis;
         labelNode.AlignmentType = AlignmentType.Left;
         
-        bool visible = TryUpdateLabel(); // false if no zone line in range / on screen
+        var visible = TryUpdateLabel(); // false if no zone line in range / on screen
         labelNode.IsVisible = visible;
         imageNode.IsVisible = visible;
     }
@@ -84,6 +84,7 @@ public class ZoneLabelNode : OverlayNode
             var adjustedWorldPoint = Vector3.Lerp(previousLocation, closestPoint, (float)Plugin.Framework.UpdateDelta.TotalSeconds * 15f);
             previousLocation = adjustedWorldPoint;
             
+            // Convert to screen
             var dist = Vector3.DistanceSquared(playerPos, closestPoint);
             if (!(dist < MaxDistance) || !Plugin.GameGui.WorldToScreen(adjustedWorldPoint, out var screenPos)) return false;
             
@@ -94,6 +95,7 @@ public class ZoneLabelNode : OverlayNode
             
             labelNode.String = row.PlaceName.Value.Name.ExtractText().Trim();
             Position = new Vector2(MathF.Round(screenPos.X - (Width / 2)), MathF.Round(screenPos.Y));
+            Size = labelNode.Size with { Y = Height };
             
             return true;
         }
