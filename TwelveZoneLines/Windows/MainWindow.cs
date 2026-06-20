@@ -49,7 +49,7 @@ public class MainWindow : Window, IDisposable
     {
         if (!Safe.Ptr((BattleChara*)Plugin.ObjectTable.LocalPlayer?.Address, out var player)) return;
         
-        var height = player->Height;
+        var height = player->Height * 2;
         Vector3 playerPos = player->Position with { Y = player->Position.Y + height };
         
         var territory = Plugin.DataManager.GetExcelSheet<TerritoryType>();

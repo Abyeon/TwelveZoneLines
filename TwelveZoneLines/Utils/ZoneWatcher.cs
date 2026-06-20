@@ -10,11 +10,11 @@ public class ZoneWatcher : IDisposable
     
     public ZoneWatcher()
     {
-        Plugin.ClientState.ZoneInit += OnZoneInit;
+        Plugin.ClientState.MapIdChanged += OnMapIdChange;
         UpdateExits();
     }
-    
-    private void OnZoneInit(ZoneInitEventArgs obj) => UpdateExits();
+
+    private void OnMapIdChange(uint obj) => UpdateExits();
 
     private void UpdateExits()
     {
@@ -27,6 +27,6 @@ public class ZoneWatcher : IDisposable
 
     public void Dispose()
     {
-        Plugin.ClientState.ZoneInit -= OnZoneInit;
+        Plugin.ClientState.MapIdChanged -= OnMapIdChange;
     }
 }
