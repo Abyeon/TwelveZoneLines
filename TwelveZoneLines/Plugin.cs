@@ -37,15 +37,14 @@ public sealed class Plugin : IDalamudPlugin
         Configuration = PluginInterface.GetPluginConfig() as Configuration ?? new Configuration();
     }
 
-    public unsafe void InitializeOverlay()
+    public void InitializeOverlay()
     {
         var travelIconPath = Path.Combine(PluginInterface.AssemblyLocation.Directory?.FullName!, "travelIcon.png");
         
         OverlayController = new OverlayController();
         OverlayController.AddNode(new ZoneLabelNode(travelIconPath)
         {
-            Size = new Vector2(30, 30),
-            Position = ((Vector2)AtkStage.Instance()->ScreenSize / 2.0f) - (new Vector2(150.0f, 30.0f) / 2.0f)
+            Size = new Vector2(30, 30)
         });
     }
 
