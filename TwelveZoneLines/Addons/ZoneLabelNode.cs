@@ -81,11 +81,11 @@ public class ZoneLabelNode : OverlayNode
         
         if (exit.IsValid)
         {
-            var closestPoint = exit.GetClosestPoint(playerPos);
+            var closestPoint = exit.GetClosestPoint(playerPos) + new Vector3(0, height, 0);
             
             // Convert to screen
             var dist = Vector3.DistanceSquared(playerPos, closestPoint);
-            if (!(dist < MaxDistance) || !WorldToScreen(closestPoint with { Y = closestPoint.Y + height}, out var screenPos))
+            if (!(dist < MaxDistance) || !WorldToScreen(closestPoint, out var screenPos))
                 return false;
             
             // Adjust scale (farther = smaller)
@@ -93,7 +93,9 @@ public class ZoneLabelNode : OverlayNode
             var scale = Vector2.Lerp(maxScale, minScale, s);
             Scale = scale;
             
+            // Update position / depth
             Position = new Vector2(MathF.Round(screenPos.X - (Width / 2)), MathF.Round(screenPos.Y));
+            UpdateDepth(closestPoint);
 
             // Update the name if it's not the same
             var name = exit.Name;
@@ -107,6 +109,33 @@ public class ZoneLabelNode : OverlayNode
         }
 
         return false;
+    }
+
+    private bool usingDepthBasedPriority;
+    
+    private unsafe void UpdateDepth(Vector3 target)
+    {
+        if (!usingDepthBasedPriority)
+        {
+            Node->SetUseDepthBasedPriority(true);
+            labelNode.Node->SetUseDepthBasedPriority(true);
+            imageNode.Node->SetUseDepthBasedPriority(true);
+            
+            usingDepthBasedPriority = true;
+        }
+
+        if (!Safe.Ptr(CameraManager.Instance(), out var cameraManager)) return;
+        var cam = cameraManager->Cameras[cameraManager->ActiveCameraIndex].Value->SceneCamera.RenderCamera;
+        var pos = cam->Origin;
+        var far = cam->FarPlane;
+        var near = cam->NearPlane;
+        
+        var dist = Vector3.Distance(target, pos);
+        var depth = (dist - near) / (far - near);
+
+        Node->Depth           = depth;
+        labelNode.Node->Depth = depth;
+        imageNode.Node->Depth = depth;
     }
     
     /// <inheritdoc/>
