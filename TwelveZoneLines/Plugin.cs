@@ -3,7 +3,6 @@ using Dalamud.Plugin;
 using System.IO;
 using System.Numerics;
 using Dalamud.Plugin.Services;
-using FFXIVClientStructs.FFXIV.Component.GUI;
 using KamiToolKit;
 using KamiToolKit.UiOverlay;
 using TwelveZoneLines.Addons;
@@ -20,6 +19,7 @@ public sealed class Plugin : IDalamudPlugin
     [PluginService] internal static IPluginLog Log { get; private set; } = null!;
     [PluginService] internal static IGameGui GameGui { get; private set; } = null!;
     [PluginService] internal static IFramework Framework { get; private set; } = null!;
+    [PluginService] internal static ISigScanner SigScanner { get; private set; } = null!;
     
     public Configuration Configuration { get; init; }
 

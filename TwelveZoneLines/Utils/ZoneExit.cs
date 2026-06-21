@@ -1,8 +1,8 @@
 ﻿using System;
 using System.Numerics;
-using Dalamud.Bindings.ImGui;
-using Dalamud.Interface.Colors;
 using FFXIVClientStructs.FFXIV.Client.LayoutEngine;
+using Lumina.Excel;
+using Lumina.Excel.Sheets;
 
 namespace TwelveZoneLines.Utils;
 
@@ -11,8 +11,12 @@ namespace TwelveZoneLines.Utils;
 /// </summary>
 public struct ZoneExit
 {
+    public RowRef<TerritoryType> TerritoryType;
     public ushort DestinationId;
     public Transform Transform;
+
+    public bool IsValid => TerritoryType.IsValid;
+    public string Name => IsValid ? TerritoryType.Value.PlaceName.Value.Name.ExtractText() : string.Empty;
 
     public Vector3 GetClosestPoint(Vector3 target)
     {

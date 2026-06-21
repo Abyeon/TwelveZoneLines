@@ -1,11 +1,9 @@
 ﻿using System;
 using System.Collections.Generic;
 using System.Numerics;
-using System.Runtime.CompilerServices;
-using Dalamud.Bindings.ImGui;
-using Dalamud.Interface.Colors;
-using Dalamud.Interface.Utility.Raii;
 using FFXIVClientStructs.FFXIV.Client.LayoutEngine;
+using Lumina.Excel;
+using Lumina.Excel.Sheets;
 using TwelveZoneLines.Utils.Structs;
 
 namespace TwelveZoneLines.Utils;
@@ -43,6 +41,8 @@ public static unsafe class LayoutMatcher
             }
         }
 
+        var territory = Plugin.DataManager.GetExcelSheet<TerritoryType>();
+
         foreach (var line in lineVfxInstances)
         {
             var line2D = new Vector2(line.Translation.X, line.Translation.Y);
@@ -71,6 +71,7 @@ public static unsafe class LayoutMatcher
                 exits.Add(new ZoneExit
                 {
                     DestinationId = closestId,
+                    TerritoryType = new RowRef<TerritoryType>(Plugin.DataManager.Excel, closestId),
                     Transform = line,
                 });
             }

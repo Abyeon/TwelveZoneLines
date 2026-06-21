@@ -1,9 +1,7 @@
 ﻿using System;
 using System.Linq;
 using System.Numerics;
-using System.Runtime.InteropServices;
 using Dalamud.Interface.Utility;
-using FFXIVClientStructs.FFXIV.Client.Game;
 using FFXIVClientStructs.FFXIV.Client.Game.Character;
 using FFXIVClientStructs.FFXIV.Client.Game.Control;
 using FFXIVClientStructs.FFXIV.Client.Graphics.Kernel;
@@ -12,9 +10,7 @@ using KamiToolKit.Classes;
 using KamiToolKit.Enums;
 using KamiToolKit.Nodes;
 using KamiToolKit.UiOverlay;
-using Lumina.Excel.Sheets;
 using TwelveZoneLines.Utils;
-
 using Matrix4x4 = FFXIVClientStructs.FFXIV.Common.Math.Matrix4x4;
 
 namespace TwelveZoneLines.Addons;
@@ -81,16 +77,11 @@ public class ZoneLabelNode : OverlayNode
         var height = player->Height;
         Vector3 playerPos = player->Position;
         
-        var territory = Plugin.DataManager.GetExcelSheet<TerritoryType>();
-        var closest = Plugin.ZoneWatcher.ZoneExits.MinBy(x => Vector3.DistanceSquared(x.Transform.Translation, playerPos));
+        var exit = Plugin.ZoneWatcher.ZoneExits.MinBy(x => Vector3.DistanceSquared(x.Transform.Translation, playerPos));
         
-        if (territory.TryGetRow(closest.DestinationId, out var row))
+        if (exit.IsValid)
         {
-            var closestPoint = closest.GetClosestPoint(playerPos);
-
-            // Smoothly lerp point over time
-            var adjustedWorldPoint = Vector3.Lerp(previousLocation, closestPoint, (float)Plugin.Framework.UpdateDelta.TotalSeconds * 15f);
-            previousLocation = adjustedWorldPoint;
+            var closestPoint = exit.GetClosestPoint(playerPos);
             
             // Convert to screen
             var dist = Vector3.DistanceSquared(playerPos, closestPoint);
@@ -105,7 +96,7 @@ public class ZoneLabelNode : OverlayNode
             Position = new Vector2(MathF.Round(screenPos.X - (Width / 2)), MathF.Round(screenPos.Y));
 
             // Update the name if it's not the same
-            var name = row.PlaceName.Value.Name.ExtractText().Trim();
+            var name = exit.Name;
             if (labelNode.String != name)
             {
                 labelNode.String = name;
