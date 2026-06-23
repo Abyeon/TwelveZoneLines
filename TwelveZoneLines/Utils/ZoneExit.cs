@@ -1,7 +1,9 @@
 ﻿using System;
 using System.Numerics;
 using FFXIVClientStructs.FFXIV.Client.LayoutEngine;
+using FFXIVClientStructs.FFXIV.Client.LayoutEngine.Layer;
 using FFXIVClientStructs.FFXIV.Common.Component.BGCollision;
+using FFXIVClientStructs.Interop;
 using Lumina.Excel;
 using Lumina.Excel.Sheets;
 
@@ -12,11 +14,26 @@ namespace TwelveZoneLines.Utils;
 /// </summary>
 public struct ZoneExit
 {
+    public Pointer<LineVfxLayoutInstance> Line;
+    public Pointer<ExitRangeLayoutInstance> Exit;
+    
     public RowRef<TerritoryType> TerritoryType;
     public Transform Transform;
 
     public bool IsValid => TerritoryType.IsValid;
     public string Name => IsValid ? TerritoryType.Value.PlaceName.Value.Name.ExtractText() : string.Empty;
+
+    public ZoneExit(Pointer<LineVfxLayoutInstance> line, Pointer<ExitRangeLayoutInstance> exit)
+    {
+        Line = line;
+        Exit = exit;
+
+        unsafe
+        {
+            TerritoryType = new RowRef<TerritoryType>(Plugin.DataManager.Excel, exit.Value->TerritoryType);
+            Transform = line.Value->Transform;
+        }
+    }
 
     /// <summary>
     /// Gets the closest point on the LineVfx object.

@@ -11,10 +11,12 @@ public class ZoneWatcher : IDisposable
     public ZoneWatcher()
     {
         Plugin.ClientState.MapIdChanged += OnMapIdChange;
+        Plugin.ClientState.TerritoryChanged += OnTerritoryChange;
         Plugin.ClientState.Login += OnLogin;
         UpdateExits();
     }
 
+    private void OnTerritoryChange(uint obj) => UpdateExits();
     private void OnLogin() => UpdateExits();
     private void OnMapIdChange(uint obj) => UpdateExits();
 
@@ -29,6 +31,7 @@ public class ZoneWatcher : IDisposable
 
     public void Dispose()
     {
+        Plugin.ClientState.TerritoryChanged -= OnTerritoryChange;
         Plugin.ClientState.MapIdChanged -= OnMapIdChange;
         Plugin.ClientState.Login -= OnLogin;
     }

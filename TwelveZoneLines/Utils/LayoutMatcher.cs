@@ -2,9 +2,9 @@
 using System.Collections.Generic;
 using System.Numerics;
 using FFXIVClientStructs.FFXIV.Client.LayoutEngine;
+using FFXIVClientStructs.FFXIV.Client.LayoutEngine.Layer;
 using Lumina.Excel;
 using Lumina.Excel.Sheets;
-using TwelveZoneLines.Utils.Structs;
 
 namespace TwelveZoneLines.Utils;
 
@@ -22,7 +22,7 @@ public static unsafe class LayoutMatcher
         if (!Safe.Ptr(world->ActiveLayout, out var active)) return false;
 
         List<IntPtr> exitRangeInstances = [];
-        List<Transform> lineVfxInstances = [];
+        List<IntPtr> lineVfxInstances = [];
         
         foreach (var (_, layerPtr) in active->Layers)
         {
@@ -38,7 +38,7 @@ public static unsafe class LayoutMatcher
                         exitRangeInstances.Add((IntPtr)instance);
                         continue;
                     case InstanceType.LineVfx:
-                        lineVfxInstances.Add(((LineVfxLayoutInstance*)instance)->Transform);
+                        lineVfxInstances.Add((IntPtr)instance);
                         continue;
                     default:
                         continue;
@@ -46,36 +46,34 @@ public static unsafe class LayoutMatcher
             }
         }
         
-        foreach (var line in lineVfxInstances)
+        foreach (var ptr in lineVfxInstances)
         {
-            var line2D = new Vector2(line.Translation.X, line.Translation.Y);
+            var line = (LineVfxLayoutInstance*)ptr;
+            
+            var line2D = new Vector2(line->Transform.Translation.X, line->Transform.Translation.Y);
             
             var smallestDistance = float.MaxValue;
-            ushort closestId = 0;
+            ExitRangeLayoutInstance* closest = null;
             foreach (var rangePtr in exitRangeInstances)
             {
-                var instance = (ILayoutInstance*)rangePtr;
-                var transform = instance->GetTransformImpl();
+                var range = (ExitRangeLayoutInstance*)rangePtr;
+                if (range->ExitType != ExitRangeType.ZoneLine) continue;
                 
-                var range2D = new Vector2(transform->Translation.X, transform->Translation.Y);
+                var transform = range->Transform;
+                
+                var range2D = new Vector2(transform.Translation.X, transform.Translation.Y);
                 var dist = Vector2.DistanceSquared(line2D, range2D);
 
                 if (dist < smallestDistance)
                 {
                     smallestDistance = dist;
-                    
-                    var range = (ExitRangeLayoutInstance*)instance;
-                    closestId = range->DestinationId;
+                    closest = range;
                 }
             }
 
-            if (closestId != 0)
+            if (closest != null)
             {
-                exits.Add(new ZoneExit
-                {
-                    TerritoryType = new RowRef<TerritoryType>(Plugin.DataManager.Excel, closestId),
-                    Transform = line,
-                });
+                exits.Add(new ZoneExit(line, closest));
             }
         }
 
