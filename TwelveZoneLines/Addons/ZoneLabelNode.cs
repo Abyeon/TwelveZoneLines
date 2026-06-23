@@ -24,7 +24,15 @@ public class ZoneLabelNode : OverlayNode
 
     public ZoneLabelNode(string imagePath)
     {
-        labelNode = new TextNode();
+        labelNode = new TextNode
+        {
+            TextFlags = TextFlags.AutoAdjustNodeSize | TextFlags.Edge,
+            TextColor = ColorHelper.GetColor(2),
+            TextOutlineColor = new Vector4(0, 0, 0, 1),
+            FontSize = 20,
+            FontType = FontType.Axis,
+            AlignmentType = AlignmentType.Left,
+        };
         labelNode.AttachNode(this);
 
         imageNode = new ImGuiImageNode
@@ -49,16 +57,7 @@ public class ZoneLabelNode : OverlayNode
 
     protected override void OnUpdate()
     {
-        labelNode.TextFlags = TextFlags.AutoAdjustNodeSize | TextFlags.Edge | TextFlags.Emboss;
-        labelNode.TextColor = ColorHelper.GetColor(2);
-        labelNode.TextOutlineColor = new Vector4(0, 0, 0, 1);
-        labelNode.FontSize = 20;
-        labelNode.FontType = FontType.Axis;
-        labelNode.AlignmentType = AlignmentType.Left;
-        
-        var visible = TryUpdateLabel(); // false if no zone line in range / on screen
-        labelNode.IsVisible = visible;
-        imageNode.IsVisible = visible;
+        IsVisible = TryUpdateLabel(); // false if no zone line in range / on screen
     }
 
     private Vector3 previousLocation = Vector3.Zero;
@@ -71,7 +70,7 @@ public class ZoneLabelNode : OverlayNode
 
     private unsafe bool TryUpdateLabel()
     {
-        if (!Safe.Obj(Plugin.ObjectTable.LocalPlayer, out var playerCharacter)) return false;
+        if (Plugin.ObjectTable.LocalPlayer is not { } playerCharacter) return false;
         if (!Safe.Ptr((BattleChara*)playerCharacter!.Address, out var player)) return false;
         
         var height = player->Height;
@@ -81,7 +80,9 @@ public class ZoneLabelNode : OverlayNode
         
         if (exit.IsValid)
         {
-            var closestPoint = exit.GetClosestPoint(playerPos) + new Vector3(0, height, 0);
+            var state = player->MoveController.MovementState;
+            var closestPoint = state != MovementStateOptions.Normal ? exit.GetClosestPoint(playerPos) : exit.GetClosestGroundPoint(playerPos);
+            closestPoint += new Vector3(0, height, 0);
             
             // Convert to screen
             var dist = Vector3.DistanceSquared(playerPos, closestPoint);
@@ -95,7 +96,7 @@ public class ZoneLabelNode : OverlayNode
             
             // Update position / depth
             Position = new Vector2(MathF.Round(screenPos.X - (Width / 2)), MathF.Round(screenPos.Y));
-            UpdateDepth(closestPoint);
+            // UpdateDepth(GetDepth(closestPoint));
 
             // Update the name if it's not the same
             var name = exit.Name;
@@ -113,7 +114,7 @@ public class ZoneLabelNode : OverlayNode
 
     private bool usingDepthBasedPriority;
     
-    private unsafe void UpdateDepth(Vector3 target)
+    private unsafe void UpdateDepth(float depth)
     {
         if (!usingDepthBasedPriority)
         {
@@ -124,18 +125,24 @@ public class ZoneLabelNode : OverlayNode
             usingDepthBasedPriority = true;
         }
 
-        if (!Safe.Ptr(CameraManager.Instance(), out var cameraManager)) return;
-        var cam = cameraManager->Cameras[cameraManager->ActiveCameraIndex].Value->SceneCamera.RenderCamera;
-        var pos = cam->Origin;
-        var far = cam->FarPlane;
-        var near = cam->NearPlane;
-        
-        var dist = Vector3.Distance(target, pos);
-        var depth = (dist - near) / (far - near);
-
         Node->Depth           = depth;
         labelNode.Node->Depth = depth;
         imageNode.Node->Depth = depth;
+    }
+
+    private static unsafe float GetDepth(Vector3 target)
+    {
+        if (!Safe.Ptr(CameraManager.Instance(), out var cameraManager)) return 0f;
+        var cam = cameraManager->Cameras[cameraManager->ActiveCameraIndex].Value->SceneCamera.RenderCamera;
+        
+        var viewSpace = Vector4.Transform(new Vector4(target, 1f), cam->ViewMatrix);
+        var planarDistance = Math.Abs(viewSpace.Z);
+
+        var near = cam->NearPlane;
+        var far = cam->FarPlane;
+        var depth = (planarDistance - near) / (far - near);
+        
+        return Math.Clamp(depth, 0f, 1f);
     }
     
     /// <inheritdoc/>

@@ -10,6 +10,11 @@ namespace TwelveZoneLines.Utils;
 
 public static unsafe class LayoutMatcher
 {
+    /// <summary>
+    /// Combines LineVfx instances and their closest ZoneExit neighbor.
+    /// </summary>
+    /// <param name="exits">Associated instances</param>
+    /// <returns>True if successful</returns>
     public static bool TryBuildAssociations(out List<ZoneExit> exits)
     {
         exits = [];
@@ -40,9 +45,7 @@ public static unsafe class LayoutMatcher
                 }
             }
         }
-
-        var territory = Plugin.DataManager.GetExcelSheet<TerritoryType>();
-
+        
         foreach (var line in lineVfxInstances)
         {
             var line2D = new Vector2(line.Translation.X, line.Translation.Y);
@@ -70,7 +73,6 @@ public static unsafe class LayoutMatcher
             {
                 exits.Add(new ZoneExit
                 {
-                    DestinationId = closestId,
                     TerritoryType = new RowRef<TerritoryType>(Plugin.DataManager.Excel, closestId),
                     Transform = line,
                 });
