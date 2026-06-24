@@ -12,12 +12,12 @@ using KamiToolKit.Enums;
 using KamiToolKit.Nodes;
 using KamiToolKit.UiOverlay;
 using TwelveZoneLines.Utils;
-using Matrix4x4 = FFXIVClientStructs.FFXIV.Common.Math.Matrix4x4;
 
 namespace TwelveZoneLines.Addons;
 
-public class ZoneLabelNode : OverlayNode
+public class ZoneLabelNode : WorldOverlayNode
 {
+    public override Vector3 Position { get; set; }
     public override OverlayLayer OverlayLayer => OverlayLayer.Background;
     
     private readonly TextNode labelNode;
@@ -53,12 +53,12 @@ public class ZoneLabelNode : OverlayNode
         labelNode.Size = Size;
         imageNode.Size = new Vector2(Size.Y);
         
-        Origin = new Vector2(Width / 2, Height);
+        Origin = new Vector2(Width / 2, Height / 2);
     }
-
-    protected override void OnUpdate()
+    
+    protected override void OnUpdate(float deltaTime)
     {
-        IsVisible = TryUpdateLabel(); // false if no zone line in range / on screen
+        IsVisible = TryUpdateLabel(deltaTime);
     }
 
     private Vector3 previousLocation = Vector3.Zero;
@@ -69,48 +69,43 @@ public class ZoneLabelNode : OverlayNode
     private readonly Vector2 minScale = new(0.5f, 0.5f);
     private readonly Vector2 maxScale = new(1.0f, 1.0f);
 
-    private unsafe bool TryUpdateLabel()
+    private unsafe bool TryUpdateLabel(float deltaTime)
     {
-        if (Plugin.ObjectTable.LocalPlayer is not { } playerCharacter) return false;
-        if (!Safe.Ptr((BattleChara*)playerCharacter!.Address, out var player)) return false;
+        if (!Safe.Ptr(Control.Instance(), out var control)) return false;
+        if (!Safe.Ptr(control->LocalPlayer, out var player)) return false;
+        if (Plugin.ZoneWatcher.ZoneExits.Count == 0) return false;
         
-        var height = player->Height;
+        // Get the closest exit
         Vector3 playerPos = player->Position;
+        var exit = Plugin.ZoneWatcher.GetClosestExit(playerPos, out var closestPoint);
         
-        var exit = Plugin.ZoneWatcher.ZoneExits.MinBy(x => Vector3.DistanceSquared(x.Transform.Translation, playerPos));
+        // If the player is flying, just get the closest point, else get the closest point on the ground.
+        var state = player->MoveController.MovementState;
+        closestPoint = state != MovementStateOptions.Normal ? closestPoint : exit.GetClosestGroundPoint(playerPos);
+        closestPoint.Y += 1;
         
-        if (exit.IsValid)
+        // Lerp to current location (maybe should be toggleable)
+        closestPoint = Vector3.Lerp(previousLocation, closestPoint, deltaTime * 30f);
+        previousLocation = closestPoint;
+        
+        // Check distance
+        var dist = Vector3.DistanceSquared(playerPos, closestPoint);
+        if (!(dist < MaxDistance)) return false;
+        Position = closestPoint;
+        
+        // Adjust scale (farther = smaller)
+        var s = ( dist - MinDistance ) / ( MaxDistance - MinDistance );
+        Scale = Vector2.Lerp(maxScale, minScale, s);
+
+        // Update the name if it's not the same
+        var name = exit.Name;
+        if (labelNode.String != name)
         {
-            var state = player->MoveController.MovementState;
-            var closestPoint = state != MovementStateOptions.Normal ? exit.GetClosestPoint(playerPos) : exit.GetClosestGroundPoint(playerPos);
-            closestPoint += new Vector3(0, height, 0);
-            
-            // Convert to screen
-            var dist = Vector3.DistanceSquared(playerPos, closestPoint);
-            if (!(dist < MaxDistance) || !WorldToScreen(closestPoint, out var screenPos))
-                return false;
-            
-            // Adjust scale (farther = smaller)
-            var s = ( dist - MinDistance ) / ( MaxDistance - MinDistance );
-            var scale = Vector2.Lerp(maxScale, minScale, s);
-            Scale = scale;
-            
-            // Update position / depth
-            Position = new Vector2(MathF.Round(screenPos.X - (Width / 2)), MathF.Round(screenPos.Y));
-            // UpdateDepth(GetDepth(closestPoint));
-
-            // Update the name if it's not the same
-            var name = exit.Name;
-            if (labelNode.String != name)
-            {
-                labelNode.String = name;
-                Size = labelNode.Size with { Y = Height };
-            }
-            
-            return true;
+            labelNode.String = name;
+            Size = labelNode.Size with { Y = Height };
         }
-
-        return false;
+            
+        return true;
     }
 
     private bool usingDepthBasedPriority;
@@ -144,50 +139,5 @@ public class ZoneLabelNode : OverlayNode
         var depth = (planarDistance - near) / (far - near);
         
         return Math.Clamp(depth, 0f, 1f);
-    }
-    
-    /// <inheritdoc/>
-    public static bool WorldToScreen(Vector3 worldPos, out Vector2 screenPos, bool frameAhead = false)
-        => WorldToScreen(worldPos, out screenPos, out var inView, frameAhead) && inView;
-    
-    /// <inheritdoc/>
-    public static unsafe bool WorldToScreen(Vector3 worldPos, out Vector2 screenPos, out bool inView, bool frameAhead = false)
-    {
-        // Read current ViewProjectionMatrix plus game window size
-        var windowPos = ImGuiHelpers.MainViewport.Pos;
-
-        var cameraMan = CameraManager.Instance();
-        var activeCamera = cameraMan->Cameras[cameraMan->ActiveCameraIndex].Value;
-        var renderCamera = activeCamera->SceneCamera.RenderCamera;
-        
-        var view = frameAhead ? renderCamera->ViewMatrix : Matrix4x4.CreateLookAt(activeCamera->SceneCamera.Position, activeCamera->SceneCamera.LookAtVector, Vector3.UnitY);
-        var proj = renderCamera->ProjectionMatrix;
-        var viewProjectionMatrix = view * proj;
-        
-        var device = Device.Instance();
-        float width = device->Width;
-        float height = device->Height;
-
-        var pCoords = Vector4.Transform(new Vector4(worldPos, 1.0f), viewProjectionMatrix);
-        var inFront = pCoords.W > 0.0f;
-
-        if (Math.Abs(pCoords.W) < float.Epsilon)
-        {
-            screenPos = Vector2.Zero;
-            inView = false;
-            return false;
-        }
-
-        pCoords *= MathF.Abs(1.0f / pCoords.W);
-        screenPos = new Vector2(pCoords.X, pCoords.Y);
-
-        screenPos.X = (0.5f * width * (screenPos.X + 1f)) + windowPos.X;
-        screenPos.Y = (0.5f * height * (1f - screenPos.Y)) + windowPos.Y;
-
-        inView = inFront &&
-                 screenPos.X > windowPos.X && screenPos.X < windowPos.X + width &&
-                 screenPos.Y > windowPos.Y && screenPos.Y < windowPos.Y + height;
-
-        return inFront;
     }
 }

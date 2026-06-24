@@ -1,5 +1,6 @@
 ﻿using System;
 using System.Numerics;
+using System.Runtime.CompilerServices;
 using FFXIVClientStructs.FFXIV.Client.LayoutEngine;
 using FFXIVClientStructs.FFXIV.Client.LayoutEngine.Layer;
 using FFXIVClientStructs.FFXIV.Common.Component.BGCollision;
@@ -20,8 +21,13 @@ public struct ZoneExit
     public RowRef<TerritoryType> TerritoryType;
     public Transform Transform;
 
+    public Vector3 ClosestPoint;
+
     public bool IsValid => TerritoryType.IsValid;
     public string Name => IsValid ? TerritoryType.Value.PlaceName.Value.Name.ExtractText() : string.Empty;
+
+    private readonly Vector3 up;
+    private readonly Vector3 right;
 
     public ZoneExit(Pointer<LineVfxLayoutInstance> line, Pointer<ExitRangeLayoutInstance> exit)
     {
@@ -32,6 +38,9 @@ public struct ZoneExit
         {
             TerritoryType = new RowRef<TerritoryType>(Plugin.DataManager.Excel, exit.Value->TerritoryType);
             Transform = line.Value->Transform;
+            
+            up = Vector3.Transform(Vector3.UnitY, Transform.Rotation);
+            right = Vector3.Transform(Vector3.UnitX, Transform.Rotation);
         }
     }
 
@@ -40,17 +49,14 @@ public struct ZoneExit
     /// </summary>
     /// <param name="target">Target point to search from</param>
     /// <returns>Closest point on the plane</returns>
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
     public Vector3 GetClosestPoint(Vector3 target)
     {
         var pos = Transform.Translation;
-        var rot = Transform.Rotation;
         var scale = Transform.Scale;
-                    
-        var up = Vector3.Transform(Vector3.UnitY, rot);
-        var right = Vector3.Transform(Vector3.UnitX, rot);
         
         var dir = target - pos;
-
+        
         var localX = Vector3.Dot(dir, right);
         var localY = Vector3.Dot(dir, up);
         
@@ -65,6 +71,7 @@ public struct ZoneExit
     /// </summary>
     /// <param name="target">Target point to search from</param>
     /// <returns>Closest point on the plane, adjusted towards the ground.</returns>
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
     public Vector3 GetClosestGroundPoint(Vector3 target)
     {
         var closest = GetClosestPoint(target);
@@ -72,7 +79,7 @@ public struct ZoneExit
 
         if (BGCollisionModule.RaycastMaterialFilter(point, Vector3.UnitY, out var hit1))
         {
-            point.Y = hit1.Point.Y + 2f;
+            point.Y = hit1.Point.Y - 1f;
         }
         else
         {

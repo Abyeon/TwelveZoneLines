@@ -1,24 +1,65 @@
 ﻿using System;
 using System.Collections.Generic;
-using Dalamud.Game.ClientState;
+using System.Linq;
+using System.Numerics;
+using System.Runtime.CompilerServices;
+using System.Threading.Tasks;
+using Dalamud.Hooking;
+using Dalamud.Plugin.Services;
+using Dalamud.Utility.Signatures;
 
 namespace TwelveZoneLines.Utils;
 
-public class ZoneWatcher : IDisposable
+public unsafe class ZoneWatcher : IDisposable
 {
     public List<ZoneExit> ZoneExits = [];
+    public ZoneExit? ClosestExit;
+
+    public delegate void TerritoryLoadedDelegate();
+    
+    // ty winter
+    [Signature("48 8b 05 ?? ?? ?? 02 c6 40 0a 01", DetourName = nameof(TerritoryLoaded))]
+    private readonly Hook<TerritoryLoadedDelegate>? territoryLoadedHook = null; // Technically related to CullingManager doesnt matter
     
     public ZoneWatcher()
     {
-        Plugin.ClientState.MapIdChanged += OnMapIdChange;
-        Plugin.ClientState.TerritoryChanged += OnTerritoryChange;
         Plugin.ClientState.Login += OnLogin;
+        UpdateExits();
+
+        Plugin.GameInteropProvider.InitializeFromAttributes(this);
+        territoryLoadedHook?.Enable();
+    }
+
+    public void TerritoryLoaded()
+    {
+        territoryLoadedHook!.Original.Invoke();
         UpdateExits();
     }
 
-    private void OnTerritoryChange(uint obj) => UpdateExits();
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    public ZoneExit GetClosestExit(Vector3 target, out Vector3 closestPoint)
+    {
+        ZoneExit exit = default;
+        closestPoint = Vector3.Zero;
+        
+        var closestDistance = float.MaxValue;
+        foreach (var zoneExit in Plugin.ZoneWatcher.ZoneExits)
+        {
+            var point = zoneExit.GetClosestPoint(target);
+            var distSq = Vector3.DistanceSquared(target, point);
+
+            if (distSq < closestDistance)
+            {
+                exit = zoneExit;
+                closestPoint = point;
+                closestDistance = distSq;
+            }
+        }
+        
+        return exit;
+    }
+    
     private void OnLogin() => UpdateExits();
-    private void OnMapIdChange(uint obj) => UpdateExits();
 
     private void UpdateExits()
     {
@@ -27,12 +68,14 @@ public class ZoneWatcher : IDisposable
         {
             ZoneExits = exits;
         }
+        
+        Plugin.Log.Verbose($"Added {ZoneExits.Count} exits.");
     }
 
     public void Dispose()
     {
-        Plugin.ClientState.TerritoryChanged -= OnTerritoryChange;
-        Plugin.ClientState.MapIdChanged -= OnMapIdChange;
         Plugin.ClientState.Login -= OnLogin;
+        
+        territoryLoadedHook?.Dispose();
     }
 }
